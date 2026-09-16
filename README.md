@@ -157,13 +157,16 @@ all in one place):
   player laser is a vertical bolt there, not the horizontal bar I'd originally guessed —
   fixed, including the rotation math in `WeaponSystem.Fire`, since a wrongly-oriented
   laser is a real visual bug, not just style. Debris/Boost/Shield icon shading was
-  nudged closer to the reference (crater dots, an upward triangle, a filled disc) since
-  it cost only a few lines; a full pixel-accurate recreation, or a bordered/rounded HUD
-  panel to match the mockup exactly, was not attempted — that's real UI/art time the
-  brief explicitly says not to spend ("engineering over art", "do not spend significant
-  time on... menus"). Control-zone tint and the role-label colour do follow the mockup's
-  role-based colour scheme (Pilot cyan / Gunner red, travelling with the role rather
-  than the player) since that was a one-line change, not a redesign.
+  nudged closer to the reference (crater dots, an upward triangle, a filled disc).
+- **HUD "feel"**: on request, the placeholder HUD was rebuilt to match the mockup
+  screenshots' *feel* — bottom-corner bordered panels (a 9-sliced rounded-rect fill +
+  outline sprite pair, generated once and reused everywhere, not hand-authored per
+  size), arrow/crosshair icons, hull as three icon squares, and a starfield backdrop.
+  Panel border and role-label colour dynamically follow the *role* (cyan Pilot / red
+  Gunner), matching how colour travels with role rather than player across a Quantum
+  Flux swap in the mockups. Stopped short of pixel-accurate recreation (exact fonts,
+  glow effects, precise corner radii) — that crosses from "match the feel" into the
+  detailed-art time the brief's "engineering over art" guidance says not to spend.
 - **Ship collision vs. Breach Hazard**: the brief's hull-damage rule lists exactly
   "enemy, debris, or enemy-projectile collision" — Breach Hazard is not in that list.
   So a direct collision between the ship and a Breach Hazard does *not* damage hull;
