@@ -534,6 +534,68 @@ comes up, rather than silently overriding a written requirement.
 
 ---
 
+## 10. `fix: touch input now takes priority over editor mouse/keyboard` (`05efa73`)
+
+Reported with a screenshot from Unity's **Device Simulator** (an iPad Mini 4 profile):
+playing from a completely fresh round, before deliberately aiming, lasers were firing
+toward the bottom-left of the screen instead of toward the enemies coming from the
+top — visibly wrong, and not what §9's default-aim fix was supposed to produce.
+
+### Bug 7: the Device Simulator runs *inside* the Editor, so both input paths were live at once
+
+**Diagnosis**: the Device Simulator is an Editor window, not a separate player — so
+`UNITY_EDITOR` is still defined while it's running, and `HandleEditorInput()` (the
+keyboard/mouse fallback, compiled in under that same `#if`) kept executing every
+frame exactly as it does in normal Play Mode, *at the same time* the simulator was
+generating real synthetic `Touch` data from clicks on the simulated screen. Both paths
+write to the same `GunnerAimWorldPosition`/`PilotMoveAxis` state. `Mouse.current
+.position` in this context doesn't correspond to a point in the simulated device's
+screen space the way `ScreenToWorldPoint`/`RectTransformUtility` expect it to — so
+every frame, whatever the touch-drag had just correctly resolved was immediately
+overwritten by a bogus mouse-derived position. This is a distinct bug from §9's — that
+one was about what happens with *no* aim input at all; this one is two *simultaneous,
+conflicting* aim inputs, one of them silently wrong.
+
+**Fix**: `MobileInputController` now tracks, every frame, whether an active touch is
+currently driving each *side's* controls — `_touchDrivingMovement` (true if any
+active touch has zone `Left`/`Right`/`Boost`) and `_touchDrivingAim` (true for
+`AimArea`/`Fire`/`Shield`), both recomputed in `RecomputeHeldStateFromTouches`, which
+now runs unconditionally every frame rather than only when touches are present (see
+below for why that matters on its own). `HandleEditorInput` checks the relevant flag
+before touching either side's state:
+```csharp
+if (!_touchDrivingMovement) { /* keyboard */ }
+if (!_touchDrivingAim)      { /* mouse */ }
+```
+`Update()` was also reordered to call `HandleTouchInput()` *before*
+`HandleEditorInput()`, so the flags reflect the current frame's touches before the
+editor fallback checks them. Net effect: whichever input path actually has real touch
+data wins outright for that side, every frame; pure keyboard/mouse testing (no
+touches at all, e.g. testing directly in the Game view without the simulator) is
+unaffected, since both flags are simply always false there.
+
+**A second, latent bug found while rewriting this same method**: the old
+`RecomputeHeldStateFromTouches` only ever set `GunnerFireHeld = true` when a Fire
+touch was held, never explicitly back to `false` when it wasn't — meaning on a real
+device, releasing the Fire button would never have stopped the weapon firing (nothing
+else in the codebase resets `GunnerFireHeld` except the Quantum Flux `CancelAllInputs`
+call). Not something the reported symptom would have surfaced directly, but the same
+class of bug, caught by re-deriving state unconditionally from current touches instead
+of only ever setting the "held" case.
+
+**Verified two ways, without needing to fake real `Touch` device input**:
+1. Injected a distinctive touch-driven aim value via reflection, set
+   `_touchDrivingAim = true` as `RecomputeHeldStateFromTouches` would, then invoked
+   `HandleEditorInput()` directly (the exact call `Update()` makes right after touch
+   processing) — the touch-set value survived untouched.
+2. Repeated with `_touchDrivingAim = false` (ordinary Editor testing, no touches) —
+   confirmed the mouse path still sets a real aim target exactly as before, so nothing
+   regressed for keyboard/mouse-only testing.
+3. Re-ran the laser-kill scoring regression from §4 to confirm gameplay itself was
+   untouched by this change.
+
+---
+
 ## Anticipated interview questions and where to point
 
 - **"Walk me through the architecture."** Start from `GameManager` as the orchestrator
@@ -571,3 +633,9 @@ comes up, rather than silently overriding a written requirement.
   brief specifies explicitly, reasoned from first principles (the ship's fixed facing
   implies a natural default fire direction) and implemented so it stays live-correct
   as the ship moves, not just right at one snapshot moment.
+- **"Explain input ownership" (second angle: editor vs. device, not just player vs.
+  player).** §10 is the strongest material here — two input paths (keyboard/mouse,
+  touch) can be *live at the same time* inside the Editor (Device Simulator), and the
+  fix is an explicit per-side priority rule, not a platform `#if`. Good concrete
+  example of why "which system currently owns this value" has to be decided
+  deliberately rather than assumed from which build target you think you're in.
