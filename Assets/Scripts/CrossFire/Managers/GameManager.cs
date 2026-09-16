@@ -60,6 +60,15 @@ namespace CrossFire
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             PlayfieldBounds.EnsureInitialized();
+
+            // Every moving object in this prototype (ship, hazards, projectiles, lasers) moves
+            // itself via direct transform.position assignment rather than Rigidbody2D.MovePosition,
+            // for simplicity. Physics2D.autoSyncTransforms defaults to false in modern Unity, which
+            // means those position changes never reach the physics engine's own body state until a
+            // sync happens — silently breaking every OnTriggerEnter2D in the game. Enabling it here
+            // is the one-line fix; the tradeoff (a small per-frame sync cost) is documented in the
+            // README's Assumptions/Performance section as a known, deliberate simplification.
+            Physics2D.autoSyncTransforms = true;
         }
 
         private void Update()

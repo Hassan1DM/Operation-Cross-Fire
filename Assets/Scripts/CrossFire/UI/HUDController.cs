@@ -50,8 +50,13 @@ namespace CrossFire
 
         private Coroutine _bannerRoutine;
 
-        private void OnEnable()
+        private void Start()
         {
+            // Subscribing here rather than OnEnable: Unity only guarantees every object's Awake
+            // runs before any Start, not that Awake on one object precedes OnEnable on another —
+            // OnEnable ordering across different GameObjects is unspecified. All the singletons
+            // this HUD depends on assign their static Instance in Awake, so Start is the first
+            // point it's safe to read them.
             GameManager.Instance.OnPhaseChanged += HandlePhaseChanged;
             GameManager.Instance.OnScoreChanged += HandleScoreChanged;
             GameManager.Instance.OnGameStateChanged += HandleGameStateChanged;
