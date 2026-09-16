@@ -445,6 +445,95 @@ else in the hierarchy before committing.
 
 ---
 
+## 9. `fix: default aim goes straight up from the ship; add Restart button` (`32f4371`)
+
+Follow-up feedback session after handing off the build, covering three points. Two
+were code changes; one was a design question answered without touching code (see the
+"design discussion" subsection below it) — worth reading both, since the same
+reasoning ("what does the brief actually require here, and is this really a bug")
+applies to either kind of feedback.
+
+### Bug 5: default aim direction ignored the ship's actual position
+
+**Symptom, as reported**: on keyboard/mouse the shot always goes exactly where you
+click — correct. But the ship sprite has a fixed "straight up" facing (it never
+rotates to match movement), and the expectation is that firing *before ever aiming*
+should default to straight up from wherever the ship currently is, not toward some
+fixed point regardless of where the Pilot has moved it.
+
+**Root cause**: `MobileInputController.GunnerAimWorldPosition` was a plain
+auto-property defaulting to `Vector3.zero` (C#'s default for an unset `Vector3`) until
+the first real aim input arrived. In the Editor this is invisible, because
+`HandleEditorInput` reads `Mouse.current.position` unconditionally every frame — the
+cursor always has *some* position, so a "real" aim value lands within the first frame
+regardless of whether the tester consciously aimed yet. On device, there's no
+equivalent always-present signal: the Gunner might tap Fire before ever dragging in
+the AimArea, and at that point the stale `(0,0,0)` default would aim toward world
+origin — which only looks right by coincidence when the ship happens to still be at
+`x = 0`.
+
+**Fix**: `GunnerAimWorldPosition` became a *computed* property instead of a stored
+one. A new `_hasAimTarget` flag (private) tracks whether real aim input has ever been
+given since the last reset; while it's false, the property returns a point straight
+up from a new `aimDefaultOrigin` reference (wired to the ship's `Muzzle` transform) —
+recomputed fresh on every read, so it keeps tracking the ship live even while the
+Pilot is actively moving it, not just at some fixed snapshot moment. `_hasAimTarget`
+resets to `false` inside `CancelAllInputs()` (already called as step 1 of every
+Quantum Flux transition), so whichever player becomes the new Gunner after a role
+swap starts with a clean straight-up default too, rather than inheriting wherever the
+*previous* Gunner's reticle happened to be sitting.
+
+**Verified** by forcing the fallback state directly (reflection-set `_hasAimTarget =
+false`, since the Editor mouse path would otherwise immediately mask it again — see
+above) after moving the ship off-centre to `x = 4.5`: the resolved aim direction from
+the muzzle came out as `(0, 1)` — exactly straight up — to floating-point precision.
+
+### Bug 6 (environment, not code): Restart button's `SceneManager.LoadScene` stalled once in testing
+
+While verifying the new Restart button, one test run showed `Time.frameCount` frozen
+at `2` for 25+ real seconds after the reload — `ShipController.Hull` stayed at its
+C# default of `0` instead of the `3` its `Start()` sets, which looked like a real bug
+at first (Start() not running). Diagnosed by checking `Time.frameCount` directly
+(confirmed the Editor's own frame pump had stalled, not that any script had thrown or
+hung) and by testing a **fresh** play session (not a scene-reload-mid-session) doing
+the exact same `Hull` check — that one showed the correct `Hull = 3` at
+`Time.frameCount = 1`. This isolates the stall to something about this specific
+automated session's Editor process handling a `SceneManager.LoadScene` call triggered
+from an unusual context (invoked via reflection from the external scripting bridge,
+not from a normal in-game `Update()` call), not to the game code itself — the same
+`ShipController.Start()` logic that stalled once here has been exercised correctly in
+every other test throughout this whole build.
+
+**If this ever shows up for real** (i.e. hitting Restart in a normal focused Editor
+session and the round *not* actually resetting): the first thing to check is whether
+`Time.timeScale` or `Time.frameCount` is actually advancing at all (rules out "the
+whole Editor froze" vs. "this specific script has a bug"), then check the Console for
+an exception from `RestartButton.Restart()` specifically.
+
+### Design discussion, not a bug: holding Left and Right at the same time
+
+Question raised, explicitly *not* asking for a hardcoded fix: is it correct that
+holding both Left and Right zones at once doesn't do anything (ship doesn't move
+either direction)?
+
+**Answer given**: yes, that's the brief's own explicit requirement, not a bug —
+*"Holding Left or Right moves continuously; holding both stops movement."*
+`MobileInputController.RecomputeHeldStateFromTouches` implements exactly that:
+```csharp
+if (leftHeld || rightHeld)
+    PilotMoveAxis = leftHeld && rightHeld ? 0f : (leftHeld ? -1f : 1f);
+```
+Both zones being "held" at the same time is a legitimate, intended state (e.g. two
+fingers, one on each zone) — it's not two separate control schemes fighting each
+other, it's one axis computed fresh each frame from whichever zones are currently
+held. No code changed here. If a *different* behaviour is wanted instead (e.g.
+"whichever was pressed most recently wins," which is what some other mobile games do)
+that's a legitimate alternative design, but it would be a deliberate deviation from
+the brief's literal text — worth being able to name explicitly as a choice if it ever
+comes up, rather than silently overriding a written requirement.
+
+---
+
 ## Anticipated interview questions and where to point
 
 - **"Walk me through the architecture."** Start from `GameManager` as the orchestrator
@@ -473,3 +562,12 @@ else in the hierarchy before committing.
   `transform.position` assignment to `Rigidbody2D.MovePosition` (the more idiomatic
   fix behind Bug 1, not taken here for time reasons); a real device build and Profiler
   capture, which this environment cannot produce.
+- **"Why does holding Left and Right at once cancel movement instead of doing
+  something else?"** That's not a bug — it's the brief's literal text ("holding both
+  stops movement"), implemented as one axis recomputed each frame from whichever
+  zones are currently held, not two schemes fighting each other. See §9.
+- **"Walk me through a design decision you made outside strict physics/architecture."**
+  The default-aim fix in §9 is good material: it's a UX default, not something the
+  brief specifies explicitly, reasoned from first principles (the ship's fixed facing
+  implies a natural default fire direction) and implemented so it stays live-correct
+  as the ship moves, not just right at one snapshot moment.
