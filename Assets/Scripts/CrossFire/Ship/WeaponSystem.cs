@@ -38,7 +38,9 @@ namespace CrossFire
             if (direction.sqrMagnitude < 0.0001f) direction = Vector2.up;
             direction.Normalize();
 
-            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            // -90 deg because the laser sprite's default art faces up (+Y), matching the
+            // reference sprite sheet's vertical laser bolt, not right (+X).
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
             Quaternion rotation = Quaternion.Euler(0f, 0f, angle);
 
             GameObject laserObj = ObjectPooler.Instance.SpawnFromPool(PoolObjectType.PlayerLaser, muzzlePos, rotation);

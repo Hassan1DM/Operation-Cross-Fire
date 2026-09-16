@@ -138,10 +138,23 @@ namespace CrossFire
             if (phaseText != null) phaseText.text = $"Phase: {phase}";
         }
 
+        // Role colour follows the role itself, not the player, matching the reference mockups:
+        // whichever player is currently Pilot shows cyan, whichever is currently Gunner shows red.
+        private static readonly Color PilotColor = new Color(0.3f, 0.85f, 1f);
+        private static readonly Color GunnerColor = new Color(1f, 0.4f, 0.45f);
+
         private void HandleRolesSwapped(Role p1Role, Role p2Role)
         {
-            if (p1RoleLabel != null) p1RoleLabel.text = $"PLAYER 1 - {(p1Role == Role.Pilot ? "PILOT" : "GUNNER")}";
-            if (p2RoleLabel != null) p2RoleLabel.text = $"PLAYER 2 - {(p2Role == Role.Pilot ? "PILOT" : "GUNNER")}";
+            if (p1RoleLabel != null)
+            {
+                p1RoleLabel.text = $"PLAYER 1 - {(p1Role == Role.Pilot ? "PILOT" : "GUNNER")}";
+                p1RoleLabel.color = p1Role == Role.Pilot ? PilotColor : GunnerColor;
+            }
+            if (p2RoleLabel != null)
+            {
+                p2RoleLabel.text = $"PLAYER 2 - {(p2Role == Role.Pilot ? "PILOT" : "GUNNER")}";
+                p2RoleLabel.color = p2Role == Role.Pilot ? PilotColor : GunnerColor;
+            }
 
             if (p1PilotPanel != null) p1PilotPanel.SetActive(p1Role == Role.Pilot);
             if (p1GunnerPanel != null) p1GunnerPanel.SetActive(p1Role == Role.Gunner);
