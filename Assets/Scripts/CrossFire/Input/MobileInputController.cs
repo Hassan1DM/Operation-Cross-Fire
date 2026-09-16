@@ -92,36 +92,53 @@ namespace CrossFire
         private void OnEnable() => EnhancedTouchSupport.Enable();
         private void OnDisable() => EnhancedTouchSupport.Disable();
 
+        // Whether any currently-active touch is driving each side's controls this frame. The
+        // Device Simulator (and any UNITY_EDITOR touch testing) runs *inside* the Editor, so
+        // Keyboard/Mouse.current are still populated at the same time as real Touch data — the
+        // editor fallback below must defer to touch per-side whenever touch is actually driving
+        // that side, or the two input paths fight over the same PilotMoveAxis/GunnerAim value
+        // every frame (this is exactly what produced shots firing in a stale/wrong direction in
+        // the Device Simulator: Mouse.current's position doesn't correspond to a point in the
+        // simulated screen space, but it was still overwriting the correct touch-derived aim).
+        private bool _touchDrivingMovement;
+        private bool _touchDrivingAim;
+
         private void Update()
         {
+            HandleTouchInput();
 #if UNITY_EDITOR || UNITY_STANDALONE
             HandleEditorInput();
 #endif
-            HandleTouchInput();
         }
 
 #if UNITY_EDITOR || UNITY_STANDALONE
         private void HandleEditorInput()
         {
-            Keyboard kb = Keyboard.current;
-            if (kb != null)
+            if (!_touchDrivingMovement)
             {
-                float axis = 0f;
-                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) axis -= 1f;
-                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) axis += 1f;
-                PilotMoveAxis = axis;
+                Keyboard kb = Keyboard.current;
+                if (kb != null)
+                {
+                    float axis = 0f;
+                    if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) axis -= 1f;
+                    if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) axis += 1f;
+                    PilotMoveAxis = axis;
 
-                if (kb.spaceKey.wasPressedThisFrame) _boostRequested = true;
+                    if (kb.spaceKey.wasPressedThisFrame) _boostRequested = true;
+                }
             }
 
-            Mouse mouse = Mouse.current;
-            if (mouse != null && worldCamera != null)
+            if (!_touchDrivingAim)
             {
-                Vector2 screenPos = mouse.position.ReadValue();
-                SetAimTarget(ScreenToWorld(screenPos));
-                GunnerFireHeld = mouse.leftButton.isPressed;
+                Mouse mouse = Mouse.current;
+                if (mouse != null && worldCamera != null)
+                {
+                    Vector2 screenPos = mouse.position.ReadValue();
+                    SetAimTarget(ScreenToWorld(screenPos));
+                    GunnerFireHeld = mouse.leftButton.isPressed;
 
-                if (mouse.rightButton.wasPressedThisFrame) _shieldRequested = true;
+                    if (mouse.rightButton.wasPressedThisFrame) _shieldRequested = true;
+                }
             }
         }
 #endif
@@ -148,10 +165,7 @@ namespace CrossFire
                 }
             }
 
-            if (_activeTouches.Count > 0)
-            {
-                RecomputeHeldStateFromTouches();
-            }
+            RecomputeHeldStateFromTouches();
         }
 
         private void RegisterTouch(int touchId, Vector2 screenPos)
@@ -206,22 +220,36 @@ namespace CrossFire
 
         /// <summary>Re-derives axis/fire-held state from whichever touches are still active.
         /// Handles "holding both Left and Right stops movement" and multi-finger Fire naturally,
-        /// without fragile per-event increment/decrement bookkeeping.</summary>
+        /// without fragile per-event increment/decrement bookkeeping. Runs every frame
+        /// (including zero active touches) so releasing a touch correctly clears the state it
+        /// was driving, rather than leaving a stale "still held" value behind — this was
+        /// previously a latent bug: GunnerFireHeld was only ever set true by this method, never
+        /// back to false, so a released Fire touch on a real device would have kept firing
+        /// forever. Also updates _touchDrivingMovement/_touchDrivingAim, which HandleEditorInput
+        /// checks before letting keyboard/mouse touch the same values.</summary>
         private void RecomputeHeldStateFromTouches()
         {
             bool leftHeld = false, rightHeld = false, fireHeld = false;
+            bool movementTouchActive = false, aimTouchActive = false;
+
             foreach (TouchOwner owner in _activeTouches.Values)
             {
-                if (owner.zone == ControlZone.Left) leftHeld = true;
-                else if (owner.zone == ControlZone.Right) rightHeld = true;
-                else if (owner.zone == ControlZone.Fire) fireHeld = true;
+                switch (owner.zone)
+                {
+                    case ControlZone.Left: leftHeld = true; movementTouchActive = true; break;
+                    case ControlZone.Right: rightHeld = true; movementTouchActive = true; break;
+                    case ControlZone.Boost: movementTouchActive = true; break;
+                    case ControlZone.Fire: fireHeld = true; aimTouchActive = true; break;
+                    case ControlZone.AimArea: aimTouchActive = true; break;
+                    case ControlZone.Shield: aimTouchActive = true; break;
+                }
             }
 
-            if (leftHeld || rightHeld)
-            {
-                PilotMoveAxis = leftHeld && rightHeld ? 0f : (leftHeld ? -1f : 1f);
-            }
-            if (fireHeld) GunnerFireHeld = true;
+            _touchDrivingMovement = movementTouchActive;
+            _touchDrivingAim = aimTouchActive;
+
+            PilotMoveAxis = leftHeld && rightHeld ? 0f : (leftHeld ? -1f : (rightHeld ? 1f : 0f));
+            GunnerFireHeld = fireHeld;
         }
 
         private Vector3 ScreenToWorld(Vector2 screenPos)
