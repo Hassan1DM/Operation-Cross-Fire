@@ -10,6 +10,11 @@ to match that reference sheet where it was cheap to do so — see "Assumptions" 
 the one place that mattered functionally (laser orientation) versus what stayed
 cosmetic. Unity 6000.3.10f1, Universal Render Pipeline, 2D physics.
 
+**Preparing for the interview defense?** See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)
+for a full chronological build log — every task in the order it happened, the
+reasoning behind each decision, and a complete diagnostic trail for every bug found
+along the way, ending with an anticipated-questions section.
+
 Two players share one interceptor for a single 60-second round. One is the **Pilot**
 (movement + Boost), the other is the **Gunner** (aim, fire, Shield). Roles swap at 20s
 and 40s via the **Quantum Flux** event, which also ramps up difficulty. The round is
