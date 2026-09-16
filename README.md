@@ -1,8 +1,14 @@
 # Operation Cross-Fire: Protecting the Orbital Corridor
 
 Junior Unity Developer take-home exercise prototype, built to the exercise brief in
-[Assets/GDD/Junior Unity Dev Exercise_ _Operation Cross-Fire_ Protecting the Orbital Corridor_.pdf](Assets/GDD/Junior%20Unity%20Dev%20Exercise_%20_Operation%20Cross-Fire_%20Protecting%20the%20Orbital%20Corridor_.pdf).
-Unity 6000.3.10f1, Universal Render Pipeline, 2D physics.
+[Assets/GDD/Junior Unity Dev Exercise_ _Operation Cross-Fire_ Protecting the Orbital Corridor_.pdf](Assets/GDD/Junior%20Unity%20Dev%20Exercise_%20_Operation%20Cross-Fire_%20Protecting%20the%20Orbital%20Corridor_.pdf)
+and cross-checked against the equivalent
+[.docx version](Assets/GDD/Junior-Unity-Dev-Exercise_-_Operation-Cross-Fire_-Protecting-the-Orbital-Corridor_.docx),
+which embeds the actual 4×2 sprite reference sheet and HUD mockup images (not visible
+from the PDF's extracted text alone). Prototype sprites and HUD colours were adjusted
+to match that reference sheet where it was cheap to do so — see "Assumptions" below for
+the one place that mattered functionally (laser orientation) versus what stayed
+cosmetic. Unity 6000.3.10f1, Universal Render Pipeline, 2D physics.
 
 Two players share one interceptor for a single 60-second round. One is the **Pilot**
 (movement + Boost), the other is the **Gunner** (aim, fire, Shield). Roles swap at 20s
@@ -146,6 +152,18 @@ during this same session, not by inspection alone.
 Where the brief was silent or ambiguous, these choices were made (all easy to change,
 all in one place):
 
+- **Sprite reference sheet**: the .docx version of the brief embeds the actual 4×2
+  reference sheet as images, which the PDF's extracted text alone didn't surface. The
+  player laser is a vertical bolt there, not the horizontal bar I'd originally guessed —
+  fixed, including the rotation math in `WeaponSystem.Fire`, since a wrongly-oriented
+  laser is a real visual bug, not just style. Debris/Boost/Shield icon shading was
+  nudged closer to the reference (crater dots, an upward triangle, a filled disc) since
+  it cost only a few lines; a full pixel-accurate recreation, or a bordered/rounded HUD
+  panel to match the mockup exactly, was not attempted — that's real UI/art time the
+  brief explicitly says not to spend ("engineering over art", "do not spend significant
+  time on... menus"). Control-zone tint and the role-label colour do follow the mockup's
+  role-based colour scheme (Pilot cyan / Gunner red, travelling with the role rather
+  than the player) since that was a one-line change, not a redesign.
 - **Ship collision vs. Breach Hazard**: the brief's hull-damage rule lists exactly
   "enemy, debris, or enemy-projectile collision" — Breach Hazard is not in that list.
   So a direct collision between the ship and a Breach Hazard does *not* damage hull;
