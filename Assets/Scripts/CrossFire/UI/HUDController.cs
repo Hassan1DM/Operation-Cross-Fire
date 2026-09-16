@@ -30,6 +30,7 @@ namespace CrossFire
         [Header("Center banner")]
         [SerializeField] private GameObject bannerRoot;
         [SerializeField] private Text bannerText;
+        [SerializeField] private GameObject restartButtonRoot;
 
         [Header("Player 1 control panels")]
         [SerializeField] private GameObject p1PilotPanel;
@@ -74,6 +75,7 @@ namespace CrossFire
             HandleScoreChanged(0);
             SetPhaseText(GamePhase.Patrol);
             if (bannerRoot != null) bannerRoot.SetActive(false);
+            if (restartButtonRoot != null) restartButtonRoot.SetActive(false);
         }
 
         private void OnDisable()
@@ -207,6 +209,9 @@ namespace CrossFire
             string message = state == GameRoundState.Won ? "HUMAN VICTORY" : "ORBITAL BREACH - GAME OVER";
             if (bannerRoot != null) bannerRoot.SetActive(true);
             if (bannerText != null) bannerText.text = message;
+            // Only shown once the round actually ends (win or loss) - never during the 2s flux
+            // banner or the 3-2-1 warning countdown, both of which also use bannerRoot.
+            if (restartButtonRoot != null) restartButtonRoot.SetActive(true);
         }
 
         private IEnumerator ShowBannerThenHide(string message, float duration)

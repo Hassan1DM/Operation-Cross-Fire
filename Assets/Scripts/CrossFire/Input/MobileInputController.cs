@@ -55,10 +55,27 @@ namespace CrossFire
 
         [SerializeField] private Camera worldCamera;
 
+        [Tooltip("Ship muzzle (or any point on the ship). Until the Gunner gives real aim " +
+                 "input (a mouse move in editor, or a drag in the AimArea on device), the " +
+                 "reticle defaults to straight up from here — not world origin — so the ship's " +
+                 "fixed-facing sprite and its default fire direction always agree, and a shot " +
+                 "taken before the first aim input still goes the way the ship is pointing " +
+                 "no matter where the Pilot has moved it.")]
+        [SerializeField] private Transform aimDefaultOrigin;
+        [SerializeField] private float aimDefaultDistance = 20f;
+
         // Published, per-frame state consumed by ShipController / WeaponSystem / ShieldSystem.
         public float PilotMoveAxis { get; private set; }
-        public Vector3 GunnerAimWorldPosition { get; private set; }
+
+        public Vector3 GunnerAimWorldPosition =>
+            _hasAimTarget ? _aimWorldPosition
+            : aimDefaultOrigin != null ? aimDefaultOrigin.position + Vector3.up * aimDefaultDistance
+            : Vector3.zero;
+
         public bool GunnerFireHeld { get; private set; }
+
+        private Vector3 _aimWorldPosition;
+        private bool _hasAimTarget;
 
         private bool _boostRequested;
         private bool _shieldRequested;
@@ -101,7 +118,7 @@ namespace CrossFire
             if (mouse != null && worldCamera != null)
             {
                 Vector2 screenPos = mouse.position.ReadValue();
-                GunnerAimWorldPosition = ScreenToWorld(screenPos);
+                SetAimTarget(ScreenToWorld(screenPos));
                 GunnerFireHeld = mouse.leftButton.isPressed;
 
                 if (mouse.rightButton.wasPressedThisFrame) _shieldRequested = true;
@@ -148,15 +165,21 @@ namespace CrossFire
 
             if (zone == ControlZone.Boost) _boostRequested = true;
             if (zone == ControlZone.Shield) _shieldRequested = true;
-            if (zone == ControlZone.AimArea) GunnerAimWorldPosition = ScreenToWorld(screenPos);
+            if (zone == ControlZone.AimArea) SetAimTarget(ScreenToWorld(screenPos));
         }
 
         private void UpdateTouch(int touchId, Vector2 screenPos)
         {
             if (_activeTouches.TryGetValue(touchId, out TouchOwner owner) && owner.zone == ControlZone.AimArea)
             {
-                GunnerAimWorldPosition = ScreenToWorld(screenPos);
+                SetAimTarget(ScreenToWorld(screenPos));
             }
+        }
+
+        private void SetAimTarget(Vector3 worldPos)
+        {
+            _aimWorldPosition = worldPos;
+            _hasAimTarget = true;
         }
 
         private ControlZone ResolveZone(PlayerSlot slot, Role role, Vector2 screenPos)
@@ -232,6 +255,10 @@ namespace CrossFire
             GunnerFireHeld = false;
             _boostRequested = false;
             _shieldRequested = false;
+            // Whoever becomes the new Gunner after this Quantum Flux swap starts aiming
+            // straight up from the ship until they give real aim input, not wherever the
+            // previous Gunner's reticle happened to be left.
+            _hasAimTarget = false;
         }
     }
 }
