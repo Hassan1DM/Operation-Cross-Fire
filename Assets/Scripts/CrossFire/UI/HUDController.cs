@@ -17,12 +17,15 @@ namespace CrossFire
         [Header("Top bar")]
         [SerializeField] private Text timerText;
         [SerializeField] private Text hullText;
+        [SerializeField] private Image[] hullIcons;
         [SerializeField] private Text scoreText;
         [SerializeField] private Text phaseText;
 
         [Header("Role labels")]
         [SerializeField] private Text p1RoleLabel;
         [SerializeField] private Text p2RoleLabel;
+        [SerializeField] private Image p1FrameOutline;
+        [SerializeField] private Image p2FrameOutline;
 
         [Header("Center banner")]
         [SerializeField] private GameObject bannerRoot;
@@ -114,11 +117,23 @@ namespace CrossFire
             if (p2ShieldFill != null) p2ShieldFill.fillAmount = shield01;
         }
 
+        private static readonly Color HullFilledColor = new Color(0.3f, 0.85f, 1f);
+        private static readonly Color HullEmptyColor = new Color(0.3f, 0.85f, 1f, 0.15f);
+
         private void HandleHullChanged(int hull)
         {
             if (hull == _lastDisplayedHull) return;
             _lastDisplayedHull = hull;
             if (hullText != null) hullText.text = $"Hull: {hull}/3";
+
+            if (hullIcons != null)
+            {
+                for (int i = 0; i < hullIcons.Length; i++)
+                {
+                    if (hullIcons[i] == null) continue;
+                    hullIcons[i].color = i < hull ? HullFilledColor : HullEmptyColor;
+                }
+            }
         }
 
         private void HandleScoreChanged(int score)
@@ -155,6 +170,8 @@ namespace CrossFire
                 p2RoleLabel.text = $"PLAYER 2 - {(p2Role == Role.Pilot ? "PILOT" : "GUNNER")}";
                 p2RoleLabel.color = p2Role == Role.Pilot ? PilotColor : GunnerColor;
             }
+            if (p1FrameOutline != null) p1FrameOutline.color = p1Role == Role.Pilot ? PilotColor : GunnerColor;
+            if (p2FrameOutline != null) p2FrameOutline.color = p2Role == Role.Pilot ? PilotColor : GunnerColor;
 
             if (p1PilotPanel != null) p1PilotPanel.SetActive(p1Role == Role.Pilot);
             if (p1GunnerPanel != null) p1GunnerPanel.SetActive(p1Role == Role.Gunner);
