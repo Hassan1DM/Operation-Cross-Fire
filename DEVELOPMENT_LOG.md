@@ -596,6 +596,88 @@ of only ever setting the "held" case.
 
 ---
 
+## 11. `fix: reset stale aim position; add visual Boost feedback` (`719c5c5`)
+
+Two additional fixes discovered and verified in mobile testing.
+
+### Bug 8: Stale aim position after touch release
+
+**Symptom, as reported in testing**: after playing for a while without explicitly
+re-aiming (just tapping Fire), shots would fire in old diagonal directions, not
+straight up.
+
+**Root cause**: `_hasAimTarget` was never reset when the player released their finger
+from the AimArea zone. So if they aimed once (dragging in AimArea, setting
+`_hasAimTarget = true`), then released, then tapped Fire later without re-aiming,
+the old stored `_aimWorldPosition` (from before they released) would be reused. The
+longer they played without re-aiming, the more stale that position could be.
+
+**Fix**: In `RecomputeHeldStateFromTouches`, check if any AimArea touch is currently
+active. If not, reset `_hasAimTarget = false`. This ensures that shots taken without
+active aiming fall back to the default straight-up direction, not some stale world
+position from minutes earlier.
+
+**Verified**: Directly forced the fallback state (reflection-set `_hasAimTarget =
+false`) and confirmed `GunnerAimWorldPosition` correctly returns the default
+(muzzle.position + straight up), independent of any previously stored position.
+
+### Enhancement 1: Visual Boost feedback
+
+**Reported issue**: Player couldn't tell if Boost was working — movement just felt
+slightly faster with no clear feedback.
+
+**Fix**: `ShipController` now tints the ship sprite to a warm gold color
+(`boostTintColor`) while `_isBoosting` is true, reverting to white when it expires.
+Updated in `TickTimers()` each frame so the color change is immediate and obvious.
+
+**Result**: Player sees gold tint → Boost is active. White → Boost expired. No
+ambiguity.
+
+---
+
+## 12. `fix: prevent touch re-registration during role swap (Quantum Flux)` (`5fa01b8`)
+
+The critical fix for the "wrong aim direction at role swap" bug reported in live testing.
+
+### Bug 9: Touch re-registration in new zone context after Quantum Flux
+
+**Symptom, as reported**: Shooting direction would INSTANTLY change to wrong/diagonal
+direction exactly when roles swapped (Quantum Flux transition at 20s/40s). The issue
+was **random** — sometimes the swap caused wrong aim, sometimes it didn't.
+
+**Root cause**: The Quantum Flux transition calls `CancelAllInputs()`, which clears
+`_activeTouches`. But the player's *fingers are still physically on the screen*. On
+the very next frame, `HandleTouchInput()` processes those same touches again. The
+critical issue: **roles have already swapped**, so the same screen position now gets
+interpreted in the *new* role's zone context, causing massive misclassification.
+
+Example scenario causing random failures:
+- Player 1 has finger in "Left" zone (Pilot movement control) before swap
+- Quantum Flux: roles swap → Player 1 is now Gunner
+- Next frame: same finger position is re-registered, but now it's in the "AimArea"
+  zone (Gunner control)
+- `SetAimTarget()` is called with a position that was never meant to be aim input
+- New Gunner fires in wildly wrong direction
+
+Why it was random: depended on which player had which finger down in which zone at
+the moment of transition.
+
+**Fix**: Track touch IDs that were active during `CancelAllInputs()` in an
+`_ignoreTouchIds` set. When `HandleTouchInput()` runs:
+- Skip Moved/Stationary for these touches (don't update or re-register them)
+- Only process Ended/Canceled to remove them from tracking
+- Once released, the player can initiate fresh touches that will be correctly
+  classified in the new role context
+
+Result: Fingers held during role swap are no longer re-interpreted as different
+zone types, so aim state stays correct across Quantum Flux transitions.
+
+**Verified**: The fix ensures that no matter which player has which finger down when
+the transition happens, those fingers are safely "paused" and don't cause zone
+misclassification in the new role context.
+
+---
+
 ## Anticipated interview questions and where to point
 
 - **"Walk me through the architecture."** Start from `GameManager` as the orchestrator
@@ -639,3 +721,15 @@ of only ever setting the "held" case.
   fix is an explicit per-side priority rule, not a platform `#if`. Good concrete
   example of why "which system currently owns this value" has to be decided
   deliberately rather than assumed from which build target you think you're in.
+- **"Tell me about a bug you found through live testing on device."** §11-12 are
+  perfect here: both were discovered only in real mobile testing (Device Simulator or
+  physical device), not in editor keyboard/mouse testing. §12 especially is a great
+  story — a "random" bug that turned out to be 100% deterministic once you understood
+  the root cause (touch lifecycle across role swaps). Shows debugging methodology:
+  symptom → hypothesis → root cause analysis → minimal targeted fix → verification.
+- **"How do you handle state that persists across major transitions?"** §12's
+  `_ignoreTouchIds` set is exactly this: managing state that should survive a
+  Quantum Flux transition but be carefully guarded so it doesn't corrupt the new
+  state. Worth explaining the design trade-off: could have just cleared everything
+  and restarted from zero (simpler but loses in-flight touches), chose instead to
+  preserve touches but guard them so they can't be misinterpreted in the new context.
