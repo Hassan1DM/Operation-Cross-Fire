@@ -248,6 +248,14 @@ namespace CrossFire
             _touchDrivingMovement = movementTouchActive;
             _touchDrivingAim = aimTouchActive;
 
+            // If no AimArea touch is active, reset the aim target so we fall back to the default
+            // straight-up aim. This prevents stale aim positions from shots taken 2 minutes after
+            // the last time the player touched the aim zone.
+            if (!aimTouchActive)
+            {
+                _hasAimTarget = false;
+            }
+
             PilotMoveAxis = leftHeld && rightHeld ? 0f : (leftHeld ? -1f : (rightHeld ? 1f : 0f));
             GunnerFireHeld = fireHeld;
         }

@@ -21,6 +21,7 @@ namespace CrossFire
         [SerializeField] private float boostMultiplier = 1.75f;
         [SerializeField] private float boostDuration = 1f;
         [SerializeField] private float boostCooldown = 4f;
+        [SerializeField] private Color boostTintColor = new Color(1f, 0.8f, 0.2f, 1f); // Warm gold
 
         [Header("Hull")]
         [SerializeField] private int maxHull = 3;
@@ -78,6 +79,12 @@ namespace CrossFire
             {
                 _boostTimer -= dt;
                 if (_boostTimer <= 0f) _isBoosting = false;
+            }
+
+            // Visual feedback: tint the ship gold while Boosting so the player sees it's active.
+            if (_spriteRenderer != null)
+            {
+                _spriteRenderer.color = _isBoosting ? boostTintColor : Color.white;
             }
 
             if (_isInvulnerable)
