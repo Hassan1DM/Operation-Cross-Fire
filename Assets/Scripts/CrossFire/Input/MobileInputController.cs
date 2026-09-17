@@ -103,6 +103,11 @@ namespace CrossFire
         private bool _touchDrivingMovement;
         private bool _touchDrivingAim;
 
+        // After CancelAllInputs (Quantum Flux), ignore these touch IDs until they end/cancel.
+        // Prevents a finger held during role swap from being re-registered in the new role's
+        // zone context (e.g., a "Left" button touch becoming an "AimArea" touch mid-gesture).
+        private readonly HashSet<int> _ignoreTouchIds = new HashSet<int>(10);
+
         private void Update()
         {
             HandleTouchInput();
@@ -149,6 +154,19 @@ namespace CrossFire
             for (int i = 0; i < touches.Count; i++)
             {
                 Touch touch = touches[i];
+
+                // Skip touches that were active during a role swap and are being ignored until release.
+                if (_ignoreTouchIds.Contains(touch.touchId))
+                {
+                    // Only process the end of these touches; ignore Began/Moved/Stationary.
+                    if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                    {
+                        _ignoreTouchIds.Remove(touch.touchId);
+                        _activeTouches.Remove(touch.touchId);
+                    }
+                    continue;
+                }
+
                 switch (touch.phase)
                 {
                     case TouchPhase.Began:
@@ -286,6 +304,14 @@ namespace CrossFire
         /// Boost/Shield requests and touch ownership. Called by GameManager.</summary>
         public void CancelAllInputs()
         {
+            // Before clearing, mark all currently-active touch IDs as "to be ignored" until they
+            // end. This prevents touches held during a role swap from being re-registered in the
+            // new role's zone context (e.g., a "Left" button touch becoming an "AimArea" touch).
+            foreach (int touchId in _activeTouches.Keys)
+            {
+                _ignoreTouchIds.Add(touchId);
+            }
+
             _activeTouches.Clear();
             PilotMoveAxis = 0f;
             GunnerFireHeld = false;
